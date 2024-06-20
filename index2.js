@@ -1,7 +1,7 @@
 import express from "express";
 import bodyParser from "body-parser";
 import pg from "pg";
-import dotenv from "dotenv";
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -10,7 +10,10 @@ const db = new pg.Client({
     database: process.env.DB_NAME,
     host: process.env.DB_HOST,
     password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT
+    port: process.env.DB_PORT,
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
 db.connect().then(() => {
@@ -18,6 +21,7 @@ db.connect().then(() => {
 }).catch((err) => {
     console.error("Connection error", err.stack);
 });
+
 const port = process.env.PORT || 3000;
 const app = express();
 
@@ -51,13 +55,13 @@ app.post("/transfer", async (req, res) => {
     try {
         const camnt = await db.query("SELECT amnt FROM amnt WHERE id = $1", [cstid]);
         const yramnt = await db.query("SELECT amnt FROM amnt WHERE id = $1", [urid]);
-        const ctrns = await db.query("UPDATE amnt SET amnt = amnt + $1 WHERE id = $2", [amt, cstid]);
-        const yrtrns = await db.query("UPDATE amnt SET amnt = amnt - $1 WHERE id = $2", [amt, urid]);
+        await db.query("UPDATE amnt SET amnt = amnt + $1 WHERE id = $2", [amt, cstid]);
+        await db.query("UPDATE amnt SET amnt = amnt - $1 WHERE id = $2", [amt, urid]);
         await db.query("INSERT INTO transactions (customer_id, date, description, amount) VALUES ($1, $2, $3, $4)", [cstid, date, description, amt]);
 
         res.redirect("/");
     } catch (err) {
-        console.log(err);
+        console.error(err);
     }
 });
 
@@ -71,9 +75,7 @@ app.get("/transactions", async (req, res) => {
     try {
         const transactionsResult = await db.query("SELECT * FROM transactions WHERE customer_id = $1 ORDER BY date DESC", [customerId]);
         const customerResult = await db.query("SELECT name FROM customers WHERE id = $1", [customerId]);
-        const balnce = await db.query("SELECT amnt FROM amnt WHERE id = $1", [customerId]);
-
-        const bal = balnce.rows[0].amnt;
+        const balance = await db.query("SELECT amnt FROM amnt WHERE id = $1", [customerId]);
 
         if (customerResult.rowCount === 0) {
             throw new Error("Customer not found");
@@ -81,6 +83,7 @@ app.get("/transactions", async (req, res) => {
 
         const transactions = transactionsResult.rows;
         const customerName = customerResult.rows[0].name;
+        const bal = balance.rows[0].amnt;
 
         res.render("transactions.ejs", {
             transactions: transactions,
@@ -88,7 +91,7 @@ app.get("/transactions", async (req, res) => {
             bal: bal
         });
     } catch (err) {
-        console.log(err);
+        console.error(err);
         res.status(500).send("Error retrieving transactions: " + err.message);
     }
 });
@@ -99,6 +102,7 @@ app.get("/view", (req, res) => {
 
 app.post("/customer-details", async (req, res) => {
     const ctdid = req.body.customerId;
+
     try {
         const details = await db.query("SELECT name, accounttype FROM customers WHERE id = $1", [ctdid]);
         const amndtls = await db.query("SELECT amnt FROM amnt WHERE id = $1", [ctdid]);
@@ -120,7 +124,7 @@ app.post("/customer-details", async (req, res) => {
             transactiondetails: tdtls
         });
     } catch (err) {
-        console.log(err);
+        console.error(err);
         res.status(500).send("Error retrieving customer details: " + err.message);
     }
 });

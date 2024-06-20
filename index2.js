@@ -13,7 +13,11 @@ const db = new pg.Client({
     port: process.env.DB_PORT
 });
 
-db.connect();
+db.connect().then(() => {
+    console.log("Connected to the database");
+}).catch((err) => {
+    console.error("Connection error", err.stack);
+});
 const port = process.env.PORT || 3000;
 const app = express();
 
